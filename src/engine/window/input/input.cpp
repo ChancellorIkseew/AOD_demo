@@ -1,0 +1,94 @@
+#include "input.hpp"
+//
+#include <SDL3/SDL_events.h>
+#include "controls.hpp"
+
+void Input::update(const SDL_Event& event) {
+    if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+        if (event.wheel.y < 0.0f)
+            mouseWheelScroll = MouseWheelScroll::up;
+        else if (event.wheel.y > 0.0f)
+            mouseWheelScroll = MouseWheelScroll::down;
+        return;
+    }
+    if (event.type == SDL_EVENT_MOUSE_MOTION) {
+        mouseCoord = PixelCoord(event.motion.x, event.motion.y);
+        mouseDelta.x += event.motion.xrel;
+        mouseDelta.y += event.motion.yrel;
+        return;
+    }
+    if (event.type == SDL_EVENT_TEXT_INPUT) {
+        textEntered = event.text.text;
+        return;
+    }
+
+    InputType inputType = InputType::keyboard;
+    int code = -1;
+    bool pressed = false;
+    bool repeated = false;
+
+    if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
+        code = event.key.scancode;
+        pressed = event.key.down;
+        repeated = event.key.repeat;
+    }
+    else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+        code = event.button.button;
+        pressed = event.button.down;
+        inputType = InputType::mouse;
+    }
+    else {
+        return;
+    }
+
+    lastKeyPressed = Binding(code, inputType);
+    for (auto& [bindName, binding] : Controls::getBindings()) {
+        if (inputType != binding.inputType || code != binding.code)
+            continue;
+        binding.justTriggered = !binding.active && pressed;
+        binding.released = binding.active && !pressed;
+        binding.active = pressed;
+        binding.justTriggeredOrRepeated = pressed || repeated;
+    }
+}
+
+void Input::reset(SDL_Window* sdlWindow) {
+    mouseWheelScroll = MouseWheelScroll::none;
+    textEntered = "";
+    mouseDelta = PixelCoord(0, 0);
+    lastKeyPressed.reset();
+    for (auto& [bindName, binding] : Controls::getBindings()) {
+        binding.justTriggeredOrRepeated = false;
+        binding.justTriggered = false;
+        binding.released = false;
+    }
+
+    if (textInputActive && !SDL_TextInputActive(sdlWindow))
+        SDL_StartTextInput(sdlWindow);
+    else if (!textInputActive && SDL_TextInputActive(sdlWindow))
+        SDL_StopTextInput(sdlWindow);
+}
+
+bool Input::active(cString bindName) const {
+    return Controls::getBindings().contains(bindName) && Controls::getBindings().at(bindName).active;
+}
+bool Input::jactive(cString bindName) const {
+    return Controls::getBindings().contains(bindName) && Controls::getBindings().at(bindName).justTriggered;
+}
+bool Input::released(cString bindName) const {
+    return Controls::getBindings().contains(bindName) && Controls::getBindings().at(bindName).released;
+}
+bool Input::jactiveOrRepeated(cString bindName) const {
+    return Controls::getBindings().contains(bindName) && Controls::getBindings().at(bindName).justTriggeredOrRepeated;
+}
+
+void Input::consumeMouseClicks() {
+    for (auto& [bindName, binding] : Controls::getBindings()) {
+        if (binding.inputType != InputType::mouse)
+            continue;
+        if (binding.justTriggered)
+            binding.active = false;
+        binding.justTriggered = false;
+        binding.justTriggeredOrRepeated = false;
+    }
+}

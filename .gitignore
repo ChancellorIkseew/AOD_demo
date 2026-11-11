@@ -1,0 +1,15 @@
+# project:
+libs/
+build/
+saves/
+screenshots/
+controls.tin
+settings.tin
+
+# logs:
+latest_log.txt
+
+# IDE:
+.vscode/
+.vs/
+
